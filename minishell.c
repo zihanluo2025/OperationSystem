@@ -20,29 +20,33 @@
 char            line[NL];   /* command input buffer */
 
 /* minimal job table for background processes */
-struct job { pid_t pid; int active; char cmd[NL]; } jobs[64];
+struct job { pid_t pid; int active; int id; char cmd[NL]; } jobs[64];
+static int job_counter = 0;
 
-/* record a background job */
-static void add_job(pid_t pid, char *argv[]) {
+/* record a background job and return job id */
+static int add_job(pid_t pid, char *argv[]) {
   for (int j = 0; j < 64; ++j) {
     if (!jobs[j].active) {
       jobs[j].active = 1;
       jobs[j].pid = pid;
+      jobs[j].id  = ++job_counter;
       jobs[j].cmd[0] = '\0';
-      for (int k = 0; argv[k]; ++k) {             /* build "cmd args" */
+      for (int k = 0; argv[k]; ++k) {   
+        /* build "cmd args" */         
         strncat(jobs[j].cmd, argv[k], NL-1 - strlen(jobs[j].cmd));
         if (argv[k+1]) strncat(jobs[j].cmd, " ", NL-1 - strlen(jobs[j].cmd));
       }
-      return;
+      return jobs[j].id;
     }
   }
+  return -1;
 }
 
 /* print Done for a finished background job and clear it */
 static void report_done(pid_t pid) {
   for (int j = 0; j < 64; ++j) {
     if (jobs[j].active && jobs[j].pid == pid) {
-      printf("[#]+ Done                 %s\n", jobs[j].cmd);
+      printf("[%d]+ Done                 %s\n", jobs[j].id, jobs[j].cmd);
       fflush(stdout);
       jobs[j].active = 0;
       break;
@@ -54,8 +58,8 @@ static void report_done(pid_t pid) {
 static void drain_all_children(void) {
   int status;
   pid_t pid;
-  while ((pid = waitpid(-1, &status, 0)) > 0) {   /* block until none left */
-    report_done(pid);                              /* only bg jobs print Done */
+  while ((pid = waitpid(-1, &status, 0)) > 0) {   
+    report_done(pid);                              
   }
 }
 
@@ -67,7 +71,7 @@ void sigchld_handler(int sig) {
     if (jobs[j].active) {
       pid_t r = waitpid(jobs[j].pid, &status, WNOHANG);
       if (r == jobs[j].pid) {
-        report_done(r);                            
+        report_done(r);
       }
     }
   }
@@ -89,10 +93,10 @@ void prompt(void)
 /* envp - environment pointer */
 int main(int argk, char *argv[], char *envp[])
 {
-  int            frkRtnVal;     /* value returned by fork sys call */
-  char           *v[NV];        /* array of pointers to command line tokens */
-  char           *sep = (char*)" \t\n";  /* command line token separators    */
-  int            i;             /* parse index */
+  int            frkRtnVal;     
+  char           *v[NV];        
+  char           *sep = (char*)" \t\n";  
+  int            i;             
 
   /* install SIGCHLD handler for background reaping */
   struct sigaction sa;
@@ -102,11 +106,11 @@ int main(int argk, char *argv[], char *envp[])
   if (sigaction(SIGCHLD, &sa, NULL) == -1) perror("sigaction");
 
   /* prompt for and process one command line at a time  */
-  while (1) {         /* do Forever */
+  while (1) {        
     prompt();
-    if (fgets(line, NL, stdin) == NULL) { /* read a line */
-      if (feof(stdin)) {      /* non-zero on EOF  */
-        drain_all_children();                 /* <<< ensure bg completion is reported */
+    if (fgets(line, NL, stdin) == NULL) { 
+      if (feof(stdin)) {     
+        drain_all_children();                
         exit(0);
       }
       perror("fgets");
@@ -114,13 +118,13 @@ int main(int argk, char *argv[], char *envp[])
     }
     fflush(stdin);
 
-    // This if() required for gradescope
-    if (feof(stdin)) {    /* non-zero on EOF  */
-      drain_all_children();                   /*  ensure bg completion is reported */
+    /* non-zero on EOF  */
+    if (feof(stdin)) {   
+      drain_all_children();                   
       exit(0);
     }
     if (line[0] == '#' || line[0] == '\n' || line[0] == '\000'){
-      continue;     /* to prompt */
+      continue;    
     }
 
     v[0] = strtok(line, sep);
@@ -135,7 +139,7 @@ int main(int argk, char *argv[], char *envp[])
 
     /* built-in: exit */
     if (strcmp(v[0], "exit") == 0) {
-      drain_all_children();                   
+      drain_all_children();
       exit(0);
     }
 
@@ -156,29 +160,32 @@ int main(int argk, char *argv[], char *envp[])
 
     /* fork a child process to exec the command in v[0] */
     switch (frkRtnVal = fork()) {
-      case -1:      /* fork returns error to parent process */
+       /* fork returns error to parent process */
+      case -1:     
       {
         perror("fork");
         break;
       }
-      case 0:       /* code executed only by child process */
+      case 0:       
       {
         execvp(v[0], v);
-        perror("execvp");     /* exec returns only on error */
-        _exit(127);           /* terminate child correctly */
+        perror("execvp");     
+        _exit(127);          
       }
-      default:      /* code executed only by parent process */
+      default:     
       {
         if (background) {
-          add_job(frkRtnVal, v);             /* remember background cmd */
-          printf("[#] %d\n", frkRtnVal);     /* print background pid (as required) */
+           /* remember background cmd */
+          int jid = add_job(frkRtnVal, v);         
+          printf("[%d] %d\n", jid, frkRtnVal);      
           fflush(stdout);
           /* do not wait here */
         } else {
-          if (waitpid(frkRtnVal, NULL, 0) == -1) perror("waitpid"); /* foreground wait */
+          /* foreground wait */
+          if (waitpid(frkRtnVal, NULL, 0) == -1) perror("waitpid"); 
         }
         break;
       }
     }       
-  }        
-}          
+  }         
+}           
