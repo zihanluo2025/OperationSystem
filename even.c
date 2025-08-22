@@ -1,4 +1,3 @@
-#define _POSIX_C_SOURCE 200809L
 #include <stdio.h>
 #include <stdlib.h>
 #include <signal.h>
@@ -19,9 +18,8 @@ void handle_signal(int signal) {
     }
 }
 
-// ------------------------------------------------------------
+
 // Entry function (main function)
-// ------------------------------------------------------------
 int main(int argc, char *args[]) {
     // Input validation, check if the program received exactly 1 argument
     if (argc != 2) {
@@ -36,9 +34,7 @@ int main(int argc, char *args[]) {
         return 1;  // Exit with error code
     }
 
-    // --------------------------------------------------------
     // Register handlers
-    // --------------------------------------------------------
     signal(SIGHUP, handle_signal);
     signal(SIGINT, handle_signal);
 
