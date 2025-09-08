@@ -1,34 +1,72 @@
 from mmu import MMU
+import random
 
 class RandMMU(MMU):
     def __init__(self, frames):
-        # TODO: Constructor logic for RandMMU
-        pass
-
-    def set_debug(self):
-        # TODO: Implement the method to set debug mode
-        pass
+        self.frames = frames
+        self.debug = False
+        self.page_table = {}                                                # Track dirty status
+        self.memory = []                                                    # Store current pages in memory
+        self.disk_reads = 0
+        self.disk_writes = 0
+        self.page_faults = 0
+        self.debug = True
 
     def reset_debug(self):
-        # TODO: Implement the method to reset debug mode
-        pass
+        self.debug = False
 
     def read_memory(self, page_number):
-        # TODO: Implement the method to read memory
-        pass
+        if page_number in self.memory:                                      # Hit
+            if self.debug:
+                print(f"Read HIT: page {page_number} hit")
+        else:                                                               # Miss :Page fault
+            self.page_faults += 1
+            self.disk_reads += 1
+            if self.debug:
+                print(f"Read MISS: page {page_number}  Fault")
+
+            if len(self.memory) < self.frames:
+                self.memory.append(page_number)
+            else:
+                victim = random.choice(self.memory)
+                if self.page_table.get(victim, (False,))[0]:
+                    self.disk_writes += 1
+                    if self.debug:
+                        print(f"DIRTY page {victim}")
+                self.memory.remove(victim)
+                self.memory.append(page_number)
+
+            self.page_table[page_number] = (False, None)
 
     def write_memory(self, page_number):
-        # TODO: Implement the method to write memory
-        pass
+        if page_number in self.memory:                                         # Hit
+            self.page_table[page_number] = (True, None)
+            if self.debug:
+                print(f"Write HIT: page {page_number} DIRTY")
+        else:  
+            self.page_faults += 1
+            self.disk_reads += 1
+            if self.debug:
+                print(f"Write MISS: page {page_number}   Fault")
+
+            if len(self.memory) < self.frames:
+                self.memory.append(page_number)
+            else:
+                victim = random.choice(self.memory)
+                if self.page_table.get(victim, (False,))[0]:
+                    self.disk_writes += 1
+                    if self.debug:
+                        print(f"DIRTY page {victim}")
+                self.memory.remove(victim)
+                self.memory.append(page_number)
+
+            self.page_table[page_number] = (True, None)
 
     def get_total_disk_reads(self):
-        # TODO: Implement the method to get total disk reads
-        return -1
+        return self.disk_reads
 
     def get_total_disk_writes(self):
-        # TODO: Implement the method to get total disk writes
-        return -1
+        return self.disk_writes
 
     def get_total_page_faults(self):
-        # TODO: Implement the method to get total page faults
-        return -1
+        return self.page_faults
